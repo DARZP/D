@@ -1,50 +1,62 @@
 import os
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import google.generativeai as genai
 
-# Configuración de variables de entorno (las configurarás en Koyeb)
+# Configuración de variables
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# Inicializar Gemini
+# --- 1. EL SERVIDOR "FALSO" PARA KOYEB ---
+class DummyHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b"Bot is running y Koyeb esta feliz!")
+
+def run_dummy_server():
+    # Koyeb asigna un puerto dinámico, por defecto suele ser 8000 u 8080
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(('0.0.0.0', port), DummyHandler)
+    server.serve_forever()
+# -----------------------------------------
+
+# --- 2. EL CEREBRO DEL BOT ---
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel(
     model_name="gemini-1.5-flash",
     system_instruction=(
         "Eres un asistente personal proactivo, inteligente y empático. "
-        "No eres un buscador de tareas robótico; conversas de forma natural, "
-        "haces preguntas para conocer mejor al usuario y recuerdas los detalles "
-        "que te comparte para construir una relación a largo plazo."
+        "Conversas de forma natural, haces preguntas para conocer mejor al usuario "
+        "y recuerdas los detalles que te comparte."
     )
 )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("¡Hola! Aquí estoy. A partir de ahora, este es nuestro espacio para platicar, planear y lo que necesites. ¿De qué tienes ganas de hablar hoy?")
+    await update.message.reply_text("¡Hola! Ya logramos esquivar la seguridad de Koyeb. ¿De qué hablamos hoy?")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text
-    
-    # Indicar que el bot está "escribiendo"
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     
     try:
-        # Generar respuesta con Gemini
-        # Nota: Para el MVP es unicelular, en la Fase 2 le añadiremos el historial de Firebase
         response = model.generate_content(user_message)
         await update.message.reply_text(response.text)
     except Exception as e:
-        await update.message.reply_text("Ups, tuve un pequeño pestañeo digital. ¿Me lo repites?")
+        await update.message.reply_text("Ups, error de conexión neuronal. ¿Me lo repites?")
 
 def main():
-    # Crear la aplicación de Telegram
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
+    # Arrancar el servidor web falso en un proceso paralelo
+    threading.Thread(target=run_dummy_server, daemon=True).start()
 
-    # Handlers
+    # Arrancar el bot de Telegram
+    application = Application.builder().token(TELEGRAM_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    # Iniciar el bot (Polling para desarrollo local, luego cambiaremos a Webhook en Koyeb)
+    
     application.run_polling()
 
 if __name__ == "__main__":

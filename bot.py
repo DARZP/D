@@ -9,7 +9,7 @@ import google.generativeai as genai
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# --- VARIABLES ---
+# --- VARIABLES --
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 FIREBASE_CREDENTIALS = os.environ.get("FIREBASE_CREDENTIALS")

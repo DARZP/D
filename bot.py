@@ -27,7 +27,7 @@ def run_dummy_server():
 # --- 2. EL CEREBRO DEL BOT ---
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash-latest",
+    model_name="gemini-flash-latest",
     system_instruction=(
         "Eres un asistente personal proactivo, inteligente y empático. "
         "Conversas de forma natural, haces preguntas para conocer mejor al usuario "

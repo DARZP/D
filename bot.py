@@ -49,7 +49,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Ups, error de conexión neuronal. ¿Me lo repites?")
 
 def main():
-    # Arrancar el servidor web falso en un proceso paralelo
+    # Arrancar el servidor web falso n un proceso paralelo
     threading.Thread(target=run_dummy_server, daemon=True).start()
 
     # Arrancar el bot de Telegram

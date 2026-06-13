@@ -26,7 +26,7 @@ else:
 # Inicializar Gemini (Usa el modelo que te haya funcionado)
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash", # Cambia esto si usaste 'gemini-pro' u otro
+    model_name="gemini-flash-latest", 
     system_instruction=(
         "Eres un asistente personal proactivo, inteligente y empático. "
         "Conversas de forma natural y recuerdas los detalles "

@@ -22,46 +22,70 @@ if FIREBASE_CREDENTIALS:
     db = firestore.client()
 
 # =====================================================================
-# LA MAGIA: HERRAMIENTA AUTÓNOMA PARA EL BOT (FUNCTION CALLING)
+# LAS HERRAMIENTAS AUTÓNOMAS DEL BOT (CRUD COMPLETO)
 # =====================================================================
+
 def guardar_memoria_permanente(categoria: str, informacion: str) -> str:
-    """
-    Usa esta herramienta EXCLUSIVAMENTE para guardar datos CRÍTICOS y permanentes sobre Mario.
-    Ejemplo de categorías: 'proyectos_tecnologicos', 'fechas_importantes', 'preferencias', 'salud'.
-    """
-    if not MY_CHAT_ID:
-        return "Error: MY_CHAT_ID no configurado."
-    
+    """Guarda información nueva y crítica en la memoria a largo plazo."""
+    if not MY_CHAT_ID: return "Error: MY_CHAT_ID no configurado."
     doc_ref = db.collection('perfiles').document(MY_CHAT_ID)
-    doc = doc_ref.get()
+    data = doc_ref.get().to_dict() if doc_ref.get().exists else {}
     
-    # Extraemos lo que ya existe o creamos un diccionario nuevo
-    data = doc.to_dict() if doc.exists else {}
-    
-    # Agregamos la nueva información a la categoría correspondiente
     if categoria in data:
-        if informacion not in data[categoria]: # Evitamos duplicados
+        if informacion not in data[categoria]:
             data[categoria].append(informacion)
     else:
         data[categoria] = [informacion]
         
     doc_ref.set(data, merge=True)
-    print(f"BOT AUTÓNOMO ACCIONADO: Guardó '{informacion}' en '{categoria}'")
-    return f"Éxito: La información '{informacion}' ha sido guardada en la memoria a largo plazo."
+    print(f"✅ GUARDADO: '{informacion}' en '{categoria}'")
+    return f"Éxito: Guardado en {categoria}."
+
+def modificar_memoria_permanente(categoria: str, informacion_vieja: str, informacion_nueva: str) -> str:
+    """Reemplaza un dato obsoleto por uno nuevo dentro de una categoría existente."""
+    if not MY_CHAT_ID: return "Error: MY_CHAT_ID no configurado."
+    doc_ref = db.collection('perfiles').document(MY_CHAT_ID)
+    data = doc_ref.get().to_dict() if doc_ref.get().exists else {}
+
+    if categoria in data and informacion_vieja in data[categoria]:
+        index = data[categoria].index(informacion_vieja)
+        data[categoria][index] = informacion_nueva
+        doc_ref.set(data) # Aquí sobreescribimos sin el merge para aplicar el cambio exacto
+        print(f"🔄 MODIFICADO: '{informacion_vieja}' por '{informacion_nueva}' en '{categoria}'")
+        return f"Éxito: Información actualizada en {categoria}."
+    return f"Error: No se encontró '{informacion_vieja}' en la categoría '{categoria}'."
+
+def borrar_memoria_permanente(categoria: str, informacion_a_borrar: str) -> str:
+    """Elimina por completo un dato de la memoria cuando ya no es relevante (ej. un proyecto terminado)."""
+    if not MY_CHAT_ID: return "Error: MY_CHAT_ID no configurado."
+    doc_ref = db.collection('perfiles').document(MY_CHAT_ID)
+    data = doc_ref.get().to_dict() if doc_ref.get().exists else {}
+
+    if categoria in data and informacion_a_borrar in data[categoria]:
+        data[categoria].remove(informacion_a_borrar)
+        # Si la categoría se queda vacía, la borramos completa
+        if not data[categoria]:
+            del data[categoria]
+        doc_ref.set(data)
+        print(f"🗑️ BORRADO: '{informacion_a_borrar}' de '{categoria}'")
+        return f"Éxito: Información borrada de {categoria}."
+    return f"Error: No se encontró '{informacion_a_borrar}' en la categoría '{categoria}'."
 
 # =====================================================================
 
-# Inicializar Gemini asignándole la herramienta
+# Inicializar Gemini asignándole TODO el cinturón de herramientas
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel(
     model_name="gemini-flash-latest",
-    tools=[guardar_memoria_permanente], # ¡Aquí le damos la herramienta al bot!
+    tools=[guardar_memoria_permanente, modificar_memoria_permanente, borrar_memoria_permanente], 
     system_instruction=(
-        "Eres el asistente personal avanzado de Mario. Eres proactivo e inteligente. "
-        "TIENES ACCESO A UNA HERRAMIENTA: 'guardar_memoria_permanente'. "
-        "Úsala de manera autónoma cuando el usuario te comparta información clave que no deba "
-        "olvidarse (ej. lógica de códigos, fechas límite, detalles de sus emprendimientos o avances médicos). "
-        "No preguntes si debes guardarlo, hazlo si lo consideras de alto valor."
+        "Eres el asistente personal avanzado de Mario. Eres proactivo, inteligente y eficiente. "
+        "TIENES ACCESO A 3 HERRAMIENTAS DE BASE DE DATOS: "
+        "1. 'guardar_memoria_permanente': Para datos nuevos. "
+        "2. 'modificar_memoria_permanente': Para actualizar datos obsoletos por nuevos. "
+        "3. 'borrar_memoria_permanente': Para eliminar datos que ya no sirven o proyectos terminados. "
+        "Úsalas de manera AUTÓNOMA. Mantén tu base de datos limpia, organizada y sin redundancias. "
+        "No me preguntes si debes ejecutar la herramienta, hazlo silenciosamente y luego confírmamelo en tu respuesta natural."
     )
 )
 
@@ -71,7 +95,7 @@ class DummyHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-type', 'text/plain')
         self.end_headers()
-        self.wfile.write(b"Bot V2.0: Memoria a largo plazo activada.")
+        self.wfile.write(b"Bot V2.1: CRUD y Memoria Optimizada Activos.")
 
 def run_dummy_server():
     port = int(os.environ.get("PORT", 8080))
@@ -82,7 +106,6 @@ def run_dummy_server():
 async def mensaje_espontaneo(context: ContextTypes.DEFAULT_TYPE):
     if not MY_CHAT_ID: return
     try:
-        # Recuperar perfil permanente para inyectarlo como contexto
         perfil_ref = db.collection('perfiles').document(MY_CHAT_ID).get()
         contexto_permanente = perfil_ref.to_dict() if perfil_ref.exists else "Aún no hay datos permanentes."
 
@@ -91,13 +114,12 @@ async def mensaje_espontaneo(context: ContextTypes.DEFAULT_TYPE):
         historial_firebase = doc.to_dict().get('mensajes', []) if doc.exists else []
 
         gemini_history = [{"role": msg["role"], "parts": [msg["content"]]} for msg in historial_firebase]
-        
-        # Habilitamos la ejecución automática de funciones
         chat = model.start_chat(history=gemini_history, enable_automatic_function_calling=True)
 
         prompt_oculto = (
-            f"CONTEXTO DE MEMORIA A LARGO PLAZO: {contexto_permanente} \n\n"
-            "Teniendo en cuenta lo anterior, genera un mensaje proactivo y natural para iniciar la conversación. "
+            f"CONTEXTO ACTUAL DE TU BASE DE DATOS (NO LO REPITAS, SOLO ÚSALO): {contexto_permanente} \n\n"
+            "Genera un mensaje proactivo y natural para iniciar la conversación. "
+            "Si ves algún dato en tu base de datos que podría estar desactualizado, pregúntame por él para usar tus herramientas de limpieza."
         )
         
         response = chat.send_message(prompt_oculto)
@@ -111,7 +133,7 @@ async def mensaje_espontaneo(context: ContextTypes.DEFAULT_TYPE):
 
 # --- LÓGICA REACTIVA ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Arquitectura V2 lista. Ahora analizo y guardo lo importante por mi cuenta.")
+    await update.message.reply_text("Arquitectura V2.1 lista. Sistema de auto-limpieza y modificación de memoria activado.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text
@@ -119,22 +141,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
     
     try:
-        # 1. Recuperamos la Memoria a Largo Plazo
         perfil_ref = db.collection('perfiles').document(chat_id).get()
         contexto_permanente = perfil_ref.to_dict() if perfil_ref.exists else "No hay datos."
 
-        # 2. Recuperamos el hilo de la conversación a corto plazo
         doc_ref = db.collection('conversaciones').document(chat_id)
         doc = doc_ref.get()
         historial_firebase = doc.to_dict().get('mensajes', []) if doc.exists else []
 
         gemini_history = [{"role": msg["role"], "parts": [msg["content"]]} for msg in historial_firebase]
-        
-        # 3. Encendemos el chat con la capacidad de usar herramientas de forma automática
         chat = model.start_chat(history=gemini_history, enable_automatic_function_calling=True)
         
-        # 4. Inyectamos la memoria permanentemente en silencio junto con tu mensaje
-        mensaje_con_contexto = f"[Memoria Permanente Actual: {contexto_permanente}]\n\nMensaje del usuario: {user_message}"
+        mensaje_con_contexto = f"[Base de datos actual: {contexto_permanente}]\n\nMensaje: {user_message}"
         
         response = chat.send_message(mensaje_con_contexto)
         bot_response = response.text
@@ -151,7 +168,6 @@ def main():
     threading.Thread(target=run_dummy_server, daemon=True).start()
     application = Application.builder().token(TELEGRAM_TOKEN).build()
     
-    # Configuración del despertador (ej. cada 8 horas)
     application.job_queue.run_repeating(mensaje_espontaneo, interval=28800, first=10) 
 
     application.add_handler(CommandHandler("start", start))
@@ -161,4 +177,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
